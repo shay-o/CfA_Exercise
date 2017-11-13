@@ -1,0 +1,328 @@
+---
+author: "Shay O'Reilly"
+title: "Notes"
+date: "11/9/2017"
+output: html_document
+---
+## Practices 
+
+### Logging
+
+* Have tool for viewing log to check system health.
+https://cartesianfaith.com/2016/07/07/best-practices-for-logging-computational-systems-in-r-and-python/
+
+
+* Always log
+## General Approach
+
+Outline general approach here.
+- Think through the problem. Come a the data with a hypothesis. Generate ideas before looking at it.
+- Do summary analysis first to understand shape of data (find errors and patterns)
+
+## Coding Philosophy
+
+- Style guide. Linting to flag style problems
+    - Note R is a good case. So many variations and packages and libraries. Tidyverse is a convention standardization point. 
+    - Note this is static vs unit tests which involved the running the code
+    - https://google.github.io/styleguide/Rguide.xml
+    - Everything in a function. Everything in error handling and logging.
+    - Describe way to report on logs for errors.
+- Continuous integration
+- Understand environment (packages) and store/load for reproduction
+- Code Reviews
+- Logging
+- Error tracking and reporting
+- "code linting, static analysis, performance monitoring, logging, exception tracking, and dependency management;"
+
+# Skills 
+
+## Skills Best Guess
+
+1. Load a new file
+  SQL: RODBC
+  API
+  Web Service
+  File Store:
+  Web page: 
+  Repeatable via query, file read from ftp, 
+2. Clean it
+  Repeatable via functions. Package? Source?
+3. Transform it
+4. Join it
+5. Make it repeatable, testable, monitorable.
+      Logging: 
+        https://cartesianfaith.com/2016/07/07/best-practices-for-logging-computational-systems-in-r-and-python/
+      Unit Testing: 
+        https://www.johndcook.com/blog/2013/06/12/example-of-unit-testing-r-code-with-testthat/
+      Monitoring?
+6. Export/Write/Publish to a store
+
+  File
+```{r}
+  #Export the Data
+  write.table(bike, "E:\bikeshare_exp_tab.txt", sep="\t")
+  write.csv(bike, file = "bikeshare_csv_exp.csv")
+
+```
+  Publish - R Shiny
+
+
+1. Take some new code
+2. Understand it
+3. Debug it
+
+
+### Connect
+
+* Connect to DB
+```{r Connect to DB}
+## Connecting to SQL
+install.packages("RODBC")
+library(RODBC)
+
+query <- "
+  select * from my table
+  group by yadda
+"
+
+ch <- odbcConnect(dsn="LocalDSNName", uid="soreilly", pwd="password")
+data <- sqlQuery(ch,query)
+```
+
+
+* Connect to github
+
+* Read local file
+```{r Read csv}
+
+csv_df <- read_csv("applications.csv", col_types = "cifl", trim_ws = TRUE)
+#c = character, i = integer, n = number, d = double, l = logical, D = date, T = date time, 
+# t = time
+# TODO understand why "f" is not working.
+
+
+str(csv_df)
+
+# note trim_ws is useful
+
+```
+
+
+
+### Check and Explore Data as a function
+
+* Look for errors
+* Always write to log file
+* Have some tool or report for searching the log
+## Exploring Data
+
+## Tidyverse Reference
+
+
+Spread and Gather
+```{r Spread and Gather}
+gathered <- applications %>% gather(key= mykeyname, value = myvaluename,-id)
+
+spread <- gathered %>% spread(key = mykeyname, value = myvaluename)
+
+```
+
+```{r Explore}
+
+summary(applications$uploaded_documents)
+table(applications$uploaded_documents)
+table(table(applications$id)) # useful for frequency of frequencies. ie only one of each?
+summary(table(applications$id))
+
+# Get correlations
+applications %>% select(id,uploaded_documents) %>% cor()
+
+# Plot for correlations
+ggplot(applications, aes(id,uploaded_documents)) + 
+  geom_point() + 
+  facet_wrap( ~subscribed_to_reminders)
+
+applications_master %>% 
+  group_by(household_size) %>% 
+  summarize(approval_rate= mean(approved)) %>%
+  ggplot(.,aes(household_size,approval_rate)) +
+           geom_point()
+
+applications_master %>% 
+  group_by(household_size) %>% 
+  summarize(approval_rate= mean(approved)) %>%
+  ggplot(.,aes(household_size,approval_rate)) +
+           geom_line()
+
+applications_master %>% 
+  ggplot(.,aes(as.factor(approved),applicant_age)) +
+           geom_boxplot() +
+            labs(x = "Approved")
+
+# TODO also see Titanic for examples
+
+
+x <- applications %>% 
+  filter(uploaded_documents >= 2) %>%
+  select(id,uploaded_documents,interview_preference) %>%
+  mutate(useless = id * uploaded_documents) %>%
+  mutate(Conditional.Mutate = ifelse(uploaded_documents >= 3,"Many","Few")) %>%
+  mutate(uploaded_documents = ifelse (uploaded_documents <= 0,"NA",uploaded_documents)) %>%  
+  arrange(-useless) 
+
+```
+```{r Transform}
+
+y <- x %>% 
+  group_by(interview_preference) %>%
+  summarize(
+    count = n(),
+    useless_avg = avg(id)
+  )
+
+
+```
+
+## Controls
+
+```{r}
+
+mytranspose <- function(x) {
+  if (!is.matrix(x)) {
+    warning("argument is not a matrix")
+    return(NA_real_)
+  }
+  
+  for (i in 1:nrow(applications_master)) {
+    for (i in 1:ncol(applications_master)) {
+      y[j,i] = x[i,j]  
+    }
+  }
+  return(y)
+}
+
+# lapply instead of for loop
+times3 <- lapply(oil_prices, multiply, factor = 3)  # arg for multiple is named
+unlist(times3)
+#[1] 7.11 7.47 6.54 6.66 7.41 6.96
+```
+
+Loop
+Function
+
+
+
+
+
+## Check Dependencies
+```{r Check Dependencies}
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(package1, package2, package_n)
+```
+
+## Logging
+
+
+```{r Logging}
+
+install.packages("futile.logger")
+library("futile.logger")
+
+flog.info("My info flog")
+flog.warn("My warn flog")
+flog.error("My error flog")
+
+flog.threshold(WARN)  # Set logging to WARN
+
+#TODO...write to data store and then report.
+
+```
+
+
+```{r, Data Utilities}
+
+seq()
+rep()
+rev()
+sort()
+str()
+
+unique()
+```
+
+```{r, String Manipulation}
+# The emails vector has already been defined for you
+emails <- c("john.doe@ivyleague.edu", "education@world.gov", "dalai.lama@peace.org",
+            "invalid.edu", "quant@bigdatacollege.edu", "cookie.monster@sesame.tv")
+
+# Use grepl() to match for "edu"
+hitsl <- grepl(".edu",emails,ignore.case=TRUE)  # containing edu
+hitsl <- grepl("^.edu",emails,ignore.case=TRUE) # starting edu
+hitsl <- grepl(".edu$",emails,ignore.case=TRUE)  # Ending edu
+
+# Use grep() to match for "edu", save result to hits
+hits <- grep(".edu",emails,ignore.case = TRUE)
+
+# Subset emails using hits
+subset <- emails[hitsl]
+
+# Replacement
+animals <- c("cat", "moose", "impala", "ant", "kiwi")
+gsub(pattern = "a|i|o", replacement = "_", x = animals)
+# "c_t" "m__se" "_mp_l_" "_nt" "k_w_" 
+
+#TODO. Take only non NAs.
+#TODO. Trim
+emails %>% filter(emails(grepl(".edu")))
+
+
+# TODO split strings on delimeter (e.g. First and Last Name)
+
+```
+
+```{r, Dates}
+
+today <- sys.date()
+
+my_date <- as.Date("1971-14-05", format = "%Y-%d-%m")
+
+prev_date <- my_date - 7  # minus 7 days
+
+# Group by Week, Year
+#TO DO look at lubridate
+
+```
+  
+
+```{r, Data Cleaning}
+  
+  String replacement (see Titanic)
+    ```r countryremoved<-mydata2[!grepl("Greenland", mydata2$Country),]```
+  Normalizing
+  Imputing
+  Extracting date
+  
+  
+## TidyverseCleaning as Function
+```
+
+
+```{r, Stats}
+
+sd()
+avg()
+mean()
+cor()
+
+TODO: simple models
+
+#Regression
+#Logistic Regression
+#K-means
+
+#ARIMA?
+
+
+```
+

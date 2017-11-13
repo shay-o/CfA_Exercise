@@ -1,0 +1,230 @@
+---
+title: "Code4America Assignment - SNAP Application Analysis"
+author: "Shay O'Reilly"
+date: "10/25/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyverse)
+library(knitr)
+```
+
+##  Assignment Summary
+
+Analyze the data in two respects:
+
+   1) What application attributes/qualities correlate with approved SNAP applications?
+   2) What demographics patterns (if any) exist within the data?
+
+Given that analysis are the  recommendation(s) for where a service delivery team should focus their efforts for maximum impact. 
+
+Lastly, a brief summary of how I performed the analysis (tools/approach). Given the time constraints, you might also note any compromises or describe an ideal analysis.
+
+## Summary
+
+I looked at approval rate and application volume by various properties of the application, submitter, and members included on the submission. I found that:
+
+* The number of uploaded documents as well as age of submitter correlated with higher approval rates. 
+* Suprisingly, choosing to receive application reminders did not increase approval rate and, given the opportunity, I would like to look into this counterintuitive finding further. 
+* Properties of the members does not have an impact on approval rate. I had a hypothesis that applications with more members, applications with children, and applications with young children would have different approval rates, but I did not find that.
+
+Based on this my recommendations are to 
+
+1) Look at ways to increase document uploads. This seems like somehting that could be done through changes to the site itself. This could be messaging as well as site functionality.
+
+2) In terms of outreach and increasing enrollment, older applicants are more likely to be approved so efforts to find older applicants may be the best use of resources. This would depend of course on how difficult the people are to reach.
+
+
+## Analysis
+
+```{r read files, echo= FALSE, results= "hide", message=FALSE}
+# Read files
+applications <- read_csv("./applications.csv")
+members <- read_csv("./members.csv")
+outcomes <- read_csv("./outcomes.csv")
+
+```
+
+One hypothesis I start with is that number of members and kind of members will affect approval rate. Specifically, the presence of children and young children. So we define child as <18 years old and young child as < 12 years old and at that as an attribute of members.
+
+```{r add child features, echo=FALSE, results="hide"}
+members <- members %>% mutate(child = ifelse(age < 18,TRUE,FALSE),
+                              young_child = ifelse(age < 12,TRUE,FALSE))
+```
+
+Then I tally information about the members associated with each applications. Specifically household size (ie number of people on the application), whether there are children or young children in the household, and how many children or young children are in the household. 
+
+``` {r household properties, echo=FALSE, results="hide"}
+app_properties <- members %>% group_by(application_id) %>% 
+  summarize(
+    household_size = n(),
+    household_number_of_children = sum(child),
+    household_number_of_young_children = sum(young_child),
+    household_has_children = max(child),
+    household_has_young_children = max(young_child)
+  )
+```
+
+``` {r applicant properties, echo=FALSE, results="hide"}
+
+#Also we want to look at the properties of the submitters. So we create a table of just the #submitter properties.
+
+submitter_properties <- members %>% filter(is_submitter==TRUE) %>%
+  select(application_id,sex,age) %>% 
+  rename(applicant_sex = sex, applicant_age = age)
+
+```
+
+```{r combine tables, echo=FALSE, results="hide"}
+
+#Combine application data with application properties and applicant properties. Also add the #the outcomes.
+
+temp  <- left_join(applications,app_properties, by = c("id" ="application_id"))
+temp2 <- left_join(temp,submitter_properties, by = c("id" = "application_id"))
+applications_master <- left_join(temp2,outcomes, by = c("id" = "application_id"))
+```
+
+```{r Add integer column for approval, echo=FALSE, results="hide"}
+#Add status as integer to speed analysis
+
+  applications_master <- applications_master %>% 
+    mutate(approved = ifelse(status == "approved",1,0))
+```
+
+
+###Household/Application Properties
+
+**Household size**: Interestingly most applications have only one member and their approval rate is a little above average. The very largest households have higher approval rates as well but there are not as many of them.
+
+```{r Household size, echo=FALSE}
+  ar_hhsize <- applications_master %>% 
+      group_by(household_size) %>% 
+      summarize(
+        count = n(),
+        approval_rate = round(mean(approved),3)
+        
+      )
+
+  kable(ar_hhsize)
+```
+
+
+
+**Presence of Children**: This has no effect apparently. The approval rate is the same whether children are present or not. Note that `r round(197/402,2)*100 `% of applications do not include children as members.
+
+```{r Presence of children, echo=FALSE}
+  ar_preschild <- applications_master %>% 
+      group_by(household_has_children) %>% 
+      summarize(
+        count = n(),
+        approval_rate = round(mean(approved),3)
+      )
+
+  kable(ar_preschild)
+```
+
+
+Similarly, the presence of children under 12 also has little effect on approval rate. 
+
+```{r Presence of young children, echo=FALSE}
+  ar_presychild <- applications_master %>% 
+      group_by(household_has_young_children) %>% 
+      summarize(
+        count = n(),
+        approval_rate = round(mean(approved),3)
+      )
+
+  kable(ar_presychild)
+```
+
+
+### Submitter Properties ###
+
+Perhaps submitter properties are more relevant to approval rate - specifically I look at submitter demographics and approval rate.
+
+There is little difference by gender
+
+```{r Submitter gender, echo=FALSE}
+  ar_sub_gend <- applications_master %>% 
+      group_by(applicant_sex) %>% 
+      summarize(
+        count = n(),
+        approval_rate = round(mean(approved),3)
+      )
+
+  kable(ar_sub_gend )
+```
+
+However age has does have a big effect. 18-35 year olds make up the bulk of applicants and are the least likely to get approval. This merits further analysis. Perhaps there is something hurting the applications of this age group. Alternatively, if these submitters are less likely to be approved, then limited outreach resources should be focused on younger and older candidates.
+```{r submitter age, echo=FALSE, }
+  ar_sub_age <- applications_master %>% 
+     group_by(age_group=cut(applicant_age, breaks= c(0,18,30,40,50,Inf))) %>% 
+      summarize(
+        count = n(),
+        approval_rate = round(mean(approved),3)
+      )
+
+  kable(ar_sub_age )
+```
+
+
+## Application Properties
+
+Lastly, let's see if there are properties about the application itself that affect approval rate. A heavy majority of applicant prefer a telephone interview and they have a slightly higher approval rate but not dramatically so.
+
+```{r application interview preference, echo=FALSE}
+  ar_app_intpref <- applications_master %>% 
+      group_by(interview_preference) %>% 
+      summarize(
+        count = n(),
+        approval_rate = round(mean(approved),3)
+      )
+
+  kable(ar_app_intpref)
+```
+
+Surprisingly subscribing to reminders does not improve the chances of a successful application. Almost everyone ops to get reminders but those who don't have a higher approval rate. This deserves some further analysis. It could be that among people who don't sign up for reminders only a certain kind of applicant perseveres and completes the application and that kind of applicant is more likely to be approved. Or it could be that reminders make little or no difference and so should a) not be invested in or b) dramatically changed to be made effective.
+
+```{r application subsribed to reminders, echo=FALSE}
+  ar_app_reminders <- applications_master %>% 
+      group_by(subscribed_to_reminders) %>% 
+      summarize(
+        count = n(),
+        approval_rate = round(mean(approved),3)
+      )
+
+  kable(ar_app_reminders)
+```
+
+**Uploaded Documents** Finally, uploaded documnents. Most people don't upload documents, but those who do have a higher approval rate and the more they upload the more likely they are to be approved. This is a promising area for investment. Perhaps the application interface can be changed to encourage more documentation upload. This could be through simple encouraging text on the site ("Documentation is an important part of your application. Please submit documentation you might have!") or examples to help prompt uploads or more user-freindly functionality. 
+
+```{r application uploaded documents, echo=FALSE}
+  ar_uploaded_docs <- applications_master %>% 
+      group_by(uploaded_documents) %>% 
+     group_by(Uploaded_Documents=cut(uploaded_documents, breaks= c(1,2,3,4,5,Inf))) %>% 
+        summarize(
+        count = n(),
+        approval_rate = round(mean(approved),3)
+      )
+
+  kable(ar_uploaded_docs)
+```
+
+
+## Tools and Approach
+
+**Tools** For this analysis I used R to do a simple breakout of the available properties. I find R markdown files to be ideal for presenting findings while also enclosing code for review and possible future modifications. Code is not shown in the final presentation but is viewable if opened in R Studio. I relied heavilty on the tidyverse/dplyr library for manipulationat and for creating additional variables.
+
+**Analysis** Analysis was a straightforward breakout of approval rate by feature. I did some basic feature creation by creating codes for membership/household size as well as for prescence and count of children and young children. 
+
+With more time I would like to explore possible interaction of features to see if there are combinations that have particularly strong conversion rates. As mentioned I 
+
+Of course I would also like to get a better understanding of the domain by learnign about the SNAP application tool and process as well as learning more about the official criteria for approval and the population served. 
+
+Also given more time I would certainly look to get more understanding of the document upload process, get a deeper understanding of approval rate by submitter age, and learn more about application reminders.
+
+## Thank You
+
+I enjoyed this assignment. Thank you for the opportunity to display my skills. I hope to have to the opportunity work on this further.
